@@ -19,11 +19,12 @@
 <div class="title">SHEIN PRICE CHECKER 2.3</div>
 <div id="app"></div>
 
+<!-- Firebase scripts -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"></script>
 
 <script>
-  // 🔹 FIREBASE CONFIG - REPLACE WITH YOUR CONFIG
+  // 🔹 FIREBASE CONFIG - PASTE YOUR CONFIG HERE
   const firebaseConfig = {
     apiKey: "AIzaSyBLefWlbiXbzzCRsYXBt6GKocfW6ebCrYQ",
     authDomain: "shein-price.firebaseapp.com",
@@ -33,6 +34,7 @@
     appId: "1:493393411127:web:cfb4e48f0a3c842afcd3b2",
     measurementId: "G-T7ZTZ52XWY"
   };
+
   firebase.initializeApp(firebaseConfig);
   const database = firebase.database();
   const skuRef = database.ref("skus");
@@ -185,6 +187,7 @@
     loadSKUs();
   }
 
+  // ---------- START ----------
   showHomepage();
 </script>
 </body>
