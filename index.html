@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>SHEIN PRICE CHECKER 2.1</title>
+  <title>SHEIN PRICE CHECKER 2.2</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <script type="module">
@@ -9,7 +9,7 @@
     import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
     // 🔹 REPLACE WITH YOUR FIREBASE CONFIG
-   const firebaseConfig = {
+    const firebaseConfig = {
     apiKey: "AIzaSyBLefWlbiXbzzCRsYXBt6GKocfW6ebCrYQ",
     authDomain: "shein-price.firebaseapp.com",
     projectId: "shein-price",
@@ -26,13 +26,13 @@
     // ---------- CLOUD SKU FUNCTIONS ----------
     window.saveSKU = function() {
       const sku = document.getElementById("sku").value.trim();
-      const identity = document.getElementById("identity").value.trim();
+      const price = parseFloat(document.getElementById("skuPrice").value);
       const applicable = document.getElementById("voucherApplicable").value;
-      if (!sku || !identity) return;
+      if (!sku) return;
 
-      push(skuRef, { sku, identity, applicable });
+      push(skuRef, { sku, price: isNaN(price) ? null : price, applicable });
       document.getElementById("sku").value = "";
-      document.getElementById("identity").value = "";
+      document.getElementById("skuPrice").value = "";
     }
 
     window.deleteSKU = function(id) {
@@ -47,7 +47,7 @@
           html += `
             <div class="sku-item">
               <strong>SKU:</strong> ${data.sku}<br>
-              <strong>Identity:</strong> ${data.identity}<br>
+              <strong>Price:</strong> ${data.price !== null ? '₱'+data.price : '-'}<br>
               <strong>Voucher:</strong> ${data.applicable}<br>
               <button onclick="deleteSKU('${child.key}')">Delete</button>
             </div>
@@ -65,7 +65,7 @@
           snapshot.forEach(child => {
             const data = child.val();
             if (data.sku === skuInput.trim()) {
-              found = data.applicable;
+              found = data;
             }
           });
           resolve(found);
@@ -78,17 +78,21 @@
       const outputDiv = document.getElementById("skuCheckResult");
       if (!skuInput) return;
 
-      const result = await checkSKU(skuInput);
+      const data = await checkSKU(skuInput);
 
-      if (result === "Yes") {
-        outputDiv.innerHTML = `<div class="result" style="color:green">Voucher Applicable ✅</div>`;
-      } else if (result === "No") {
-        outputDiv.innerHTML = `<div class="result" style="color:red">Voucher Not Applicable ❌</div>`;
-      } else {
+      if (!data) {
         outputDiv.innerHTML = `<div class="result" style="color:orange">SKU Not Found ⚠</div>`;
+        return;
+      }
+
+      const color = data.applicable === "Yes" ? "green" : "red";
+      const text = data.applicable === "Yes" ? "Voucher Applicable ✅" : "Voucher Not Applicable ❌";
+      outputDiv.innerHTML = `<div class="result" style="color:${color}">${text}</div>`;
+
+      if (data.price !== null) {
+        document.getElementById("price").value = data.price;
       }
     }
-
   </script>
 
   <style>
@@ -155,7 +159,7 @@
 </head>
 <body>
 
-<div class="title">SHEIN PRICE CHECKER 2.1</div>
+<div class="title">SHEIN PRICE CHECKER 2.2</div>
 <div id="app"></div>
 
 <script>
@@ -191,6 +195,9 @@ function showVoucher() {
       <button onclick="calculateVoucher()">CHECK PRICE</button>
       <div id="output"></div>
 
+      <input type="number" id="points" placeholder="Enter Points">
+      <button class="secondary-btn" onclick="applyPoints()">APPLY POINTS</button>
+
       <button class="secondary-btn" onclick="showHomepage()">HOME</button>
     </div>
   `;
@@ -213,7 +220,24 @@ function calculateVoucher() {
     `<div class="result"><div class="price">₱${roundedPayable}</div></div>`;
 }
 
-/* ---------- POINTS ---------- */
+function applyPoints() {
+  const points = parseFloat(document.getElementById("points").value);
+  if (isNaN(points) || points < 0) return;
+
+  const maxDeduction = Math.floor(roundedPayable * 0.30);
+  const actualDeduction = Math.min(points, maxDeduction);
+  const finalPrice = roundedPayable - actualDeduction;
+
+  document.getElementById("output").innerHTML += `
+    <div class="result">
+      <p>Points Used: ${actualDeduction}</p>
+      <p>Final Price:</p>
+      <div class="price">₱${finalPrice}</div>
+    </div>
+  `;
+}
+
+/* ---------- POINTS ONLY ---------- */
 function showPoints() {
   document.getElementById("app").innerHTML = `
     <div class="card">
@@ -247,7 +271,7 @@ function showSKU() {
     <div class="card">
       <h2>Cloud SKU Manager</h2>
       <input type="text" id="sku" placeholder="Enter SKU">
-      <input type="text" id="identity" placeholder="Enter Identity">
+      <input type="number" id="skuPrice" placeholder="Enter Original Price (optional)">
       <select id="voucherApplicable">
         <option value="Yes">Voucher Applicable</option>
         <option value="No">Not Applicable</option>
@@ -262,7 +286,6 @@ function showSKU() {
 
 /* ---------- START ---------- */
 showHomepage();
-
 </script>
 </body>
 </html>
