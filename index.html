@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>PRICE CHECKER 2.0</title>
+  <title>SHEIN PRICE CHECKER 2.1</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    // 🔹 REPLACE THIS WITH YOUR FIREBASE CONFIG
-   const firebaseConfig = {
+    // 🔹 REPLACE WITH YOUR FIREBASE CONFIG
+    const firebaseConfig = {
     apiKey: "AIzaSyBosH4KWheE3W_MApV8DavCqri0S-lguX4",
     authDomain: "shein-checker.firebaseapp.com",
     projectId: "shein-checker",
@@ -25,12 +25,14 @@
 
     // ---------- CLOUD SKU FUNCTIONS ----------
     window.saveSKU = function() {
-      const sku = document.getElementById("sku").value;
-      const identity = document.getElementById("identity").value;
+      const sku = document.getElementById("sku").value.trim();
+      const identity = document.getElementById("identity").value.trim();
       const applicable = document.getElementById("voucherApplicable").value;
       if (!sku || !identity) return;
 
       push(skuRef, { sku, identity, applicable });
+      document.getElementById("sku").value = "";
+      document.getElementById("identity").value = "";
     }
 
     window.deleteSKU = function(id) {
@@ -54,6 +56,39 @@
         document.getElementById("skuList").innerHTML = html;
       });
     }
+
+    // ---------- CHECK SKU IN DATABASE ----------
+    async function checkSKU(skuInput) {
+      return new Promise((resolve) => {
+        onValue(skuRef, (snapshot) => {
+          let found = null;
+          snapshot.forEach(child => {
+            const data = child.val();
+            if (data.sku === skuInput.trim()) {
+              found = data.applicable;
+            }
+          });
+          resolve(found);
+        }, { onlyOnce: true });
+      });
+    }
+
+    window.checkVoucherBySKU = async function() {
+      const skuInput = document.getElementById("skuInput").value.trim();
+      const outputDiv = document.getElementById("skuCheckResult");
+      if (!skuInput) return;
+
+      const result = await checkSKU(skuInput);
+
+      if (result === "Yes") {
+        outputDiv.innerHTML = `<div class="result" style="color:green">Voucher Applicable ✅</div>`;
+      } else if (result === "No") {
+        outputDiv.innerHTML = `<div class="result" style="color:red">Voucher Not Applicable ❌</div>`;
+      } else {
+        outputDiv.innerHTML = `<div class="result" style="color:orange">SKU Not Found ⚠</div>`;
+      }
+    }
+
   </script>
 
   <style>
@@ -120,7 +155,7 @@
 </head>
 <body>
 
-<div class="title">PRICE CHECKER 2.0</div>
+<div class="title">SHEIN PRICE CHECKER 2.1</div>
 <div id="app"></div>
 
 <script>
@@ -137,33 +172,41 @@ function showHomepage() {
   `;
 }
 
-/* ---------- VOUCHER ---------- */
+/* ---------- VOUCHER CALCULATOR ---------- */
 function showVoucher() {
   document.getElementById("app").innerHTML = `
     <div class="card">
       <h2>Voucher Calculator</h2>
-      <input type="number" id="price" placeholder="Enter Price">
+
+      <input type="number" id="price" placeholder="Enter Price (if no SKU)">
+      <input type="text" id="skuInput" placeholder="Enter SKU (optional)">
+      <button onclick="checkVoucherBySKU()">Check SKU</button>
+      <div id="skuCheckResult"></div>
+
       <select id="voucherType">
         <option value="70">70% OFF (Cap 410)</option>
         <option value="73">73% OFF (Cap 469)</option>
       </select>
-      <button onclick="calculateVoucher()">CHECK</button>
+
+      <button onclick="calculateVoucher()">CHECK PRICE</button>
       <div id="output"></div>
+
       <button class="secondary-btn" onclick="showHomepage()">HOME</button>
     </div>
   `;
 }
 
 function calculateVoucher() {
-  const price = parseFloat(document.getElementById("price").value);
+  const priceInput = parseFloat(document.getElementById("price").value);
   const type = document.getElementById("voucherType").value;
-  if (isNaN(price) || price <= 0) return;
+
+  if (isNaN(priceInput) || priceInput <= 0) return;
 
   let discount = type === "70"
-    ? Math.min(price * 0.7, 410)
-    : Math.min(price * 0.73, 469);
+    ? Math.min(priceInput * 0.7, 410)
+    : Math.min(priceInput * 0.73, 469);
 
-  const payable = price - discount;
+  const payable = priceInput - discount;
   roundedPayable = Math.round(payable);
 
   document.getElementById("output").innerHTML =
@@ -198,7 +241,7 @@ function calculatePoints() {
     `<div class="result"><div class="price">₱${final}</div></div>`;
 }
 
-/* ---------- SKU CLOUD ---------- */
+/* ---------- CLOUD SKU ---------- */
 function showSKU() {
   document.getElementById("app").innerHTML = `
     <div class="card">
@@ -219,7 +262,7 @@ function showSKU() {
 
 /* ---------- START ---------- */
 showHomepage();
-</script>
 
+</script>
 </body>
 </html>
