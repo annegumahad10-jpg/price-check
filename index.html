@@ -58,41 +58,49 @@
     }
 
     // ---------- CHECK SKU IN DATABASE ----------
-    async function checkSKU(skuInput) {
-      return new Promise((resolve) => {
-        onValue(skuRef, (snapshot) => {
-          let found = null;
-          snapshot.forEach(child => {
-            const data = child.val();
-            if (data.sku === skuInput.trim()) {
-              found = data;
-            }
-          });
-          resolve(found);
-        }, { onlyOnce: true });
+    import { getDatabase, ref, push, remove, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+async function checkSKU(skuInput) {
+  const dbRef = ref(database);
+  try {
+    const snapshot = await get(child(dbRef, "skus"));
+    let found = null;
+    if (snapshot.exists()) {
+      snapshot.forEach(childSnap => {
+        const data = childSnap.val();
+        if (data.sku === skuInput.trim()) {
+          found = data;
+        }
       });
     }
+    return found;
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
 
-    window.checkVoucherBySKU = async function() {
-      const skuInput = document.getElementById("skuInput").value.trim();
-      const outputDiv = document.getElementById("skuCheckResult");
-      if (!skuInput) return;
+window.checkVoucherBySKU = async function() {
+  const skuInput = document.getElementById("skuInput").value.trim();
+  const outputDiv = document.getElementById("skuCheckResult");
+  if (!skuInput) return;
 
-      const data = await checkSKU(skuInput);
+  const data = await checkSKU(skuInput);
 
-      if (!data) {
-        outputDiv.innerHTML = `<div class="result" style="color:orange">SKU Not Found ⚠</div>`;
-        return;
-      }
+  if (!data) {
+    outputDiv.innerHTML = `<div class="result" style="color:orange">SKU Not Found ⚠</div>`;
+    return;
+  }
 
-      const color = data.applicable === "Yes" ? "green" : "red";
-      const text = data.applicable === "Yes" ? "Voucher Applicable ✅" : "Voucher Not Applicable ❌";
-      outputDiv.innerHTML = `<div class="result" style="color:${color}">${text}</div>`;
+  const color = data.applicable === "Yes" ? "green" : "red";
+  const text = data.applicable === "Yes" ? "Voucher Applicable ✅" : "Voucher Not Applicable ❌";
+  outputDiv.innerHTML = `<div class="result" style="color:${color}">${text}</div>`;
 
-      if (data.price !== null) {
-        document.getElementById("price").value = data.price;
-      }
-    }
+  if (data.price !== null) {
+    document.getElementById("price").value = data.price;
+  }
+}
+
   </script>
 
   <style>
@@ -289,3 +297,4 @@ showHomepage();
 </script>
 </body>
 </html>
+
