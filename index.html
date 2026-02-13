@@ -1,15 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>SHEIN PRICE CHECKER 2.2</title>
+  <title>SHEIN PRICE CHECKER 2.3</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family:'Segoe UI', sans-serif; padding:20px; background:linear-gradient(135deg,#dbeafe,#f3e8ff,#ffe4ec); }
+    .title { text-align:center; font-size:26px; font-weight:bold; margin-bottom:15px; }
+    .card { background:white; padding:25px; border-radius:20px; max-width:400px; margin:20px auto; text-align:center; }
+    input, select, button { width:100%; padding:12px; margin-top:10px; border-radius:12px; border:1px solid #ddd; }
+    button { background:#93c5fd; font-weight:bold; cursor:pointer; }
+    .secondary-btn { background:#fda4af; margin-top:10px; }
+    .result { margin-top:15px; padding:12px; background:#f5f3ff; border-radius:12px; }
+    .price { font-size:20px; font-weight:bold; color:#be185d; }
+    .sku-item { background:#fff0f6; padding:10px; border-radius:10px; margin-top:10px; }
+  </style>
+</head>
+<body>
+<div class="title">SHEIN PRICE CHECKER 2.3</div>
+<div id="app"></div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getDatabase, ref, push, onValue, remove } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"></script>
 
-    // 🔹 REPLACE WITH YOUR FIREBASE CONFIG
-    const firebaseConfig = {
+<script>
+  // 🔹 FIREBASE CONFIG - REPLACE WITH YOUR CONFIG
+  const firebaseConfig = {
     apiKey: "AIzaSyBLefWlbiXbzzCRsYXBt6GKocfW6ebCrYQ",
     authDomain: "shein-price.firebaseapp.com",
     projectId: "shein-price",
@@ -18,265 +33,144 @@
     appId: "1:493393411127:web:cfb4e48f0a3c842afcd3b2",
     measurementId: "G-T7ZTZ52XWY"
   };
+  firebase.initializeApp(firebaseConfig);
+  const database = firebase.database();
+  const skuRef = database.ref("skus");
 
-    const app = initializeApp(firebaseConfig);
-    const database = getDatabase(app);
-    const skuRef = ref(database, "skus");
+  // ---------- CLOUD SKU FUNCTIONS ----------
+  function saveSKU() {
+    const sku = document.getElementById("sku").value.trim();
+    const price = parseFloat(document.getElementById("skuPrice").value);
+    const applicable = document.getElementById("voucherApplicable").value;
+    if (!sku) return;
+    skuRef.push({ sku, price: isNaN(price) ? null : price, applicable });
+    document.getElementById("sku").value = "";
+    document.getElementById("skuPrice").value = "";
+  }
 
-    // ---------- CLOUD SKU FUNCTIONS ----------
-    window.saveSKU = function() {
-      const sku = document.getElementById("sku").value.trim();
-      const price = parseFloat(document.getElementById("skuPrice").value);
-      const applicable = document.getElementById("voucherApplicable").value;
-      if (!sku) return;
+  function deleteSKU(id) { skuRef.child(id).remove(); }
 
-      push(skuRef, { sku, price: isNaN(price) ? null : price, applicable });
-      document.getElementById("sku").value = "";
-      document.getElementById("skuPrice").value = "";
-    }
-
-    window.deleteSKU = function(id) {
-      remove(ref(database, "skus/" + id));
-    }
-
-    window.loadSKUs = function() {
-      onValue(skuRef, (snapshot) => {
-        let html = "";
-        snapshot.forEach(child => {
-          const data = child.val();
-          html += `
-            <div class="sku-item">
-              <strong>SKU:</strong> ${data.sku}<br>
-              <strong>Price:</strong> ${data.price !== null ? '₱'+data.price : '-'}<br>
-              <strong>Voucher:</strong> ${data.applicable}<br>
-              <button onclick="deleteSKU('${child.key}')">Delete</button>
-            </div>
-          `;
-        });
-        document.getElementById("skuList").innerHTML = html;
+  function loadSKUs() {
+    skuRef.on('value', snapshot => {
+      let html = "";
+      snapshot.forEach(child => {
+        const data = child.val();
+        html += `<div class="sku-item">
+          <strong>SKU:</strong> ${data.sku}<br>
+          <strong>Price:</strong> ${data.price !== null ? '₱'+data.price : '-'}<br>
+          <strong>Voucher:</strong> ${data.applicable}<br>
+          <button onclick="deleteSKU('${child.key}')">Delete</button>
+        </div>`;
       });
-    }
+      document.getElementById("skuList").innerHTML = html;
+    });
+  }
 
-    // ---------- CHECK SKU IN DATABASE ----------
-    import { getDatabase, ref, push, remove, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
-async function checkSKU(skuInput) {
-  const dbRef = ref(database);
-  try {
-    const snapshot = await get(child(dbRef, "skus"));
+  async function checkSKUOnce(skuInput) {
+    const snapshot = await skuRef.once('value');
     let found = null;
-    if (snapshot.exists()) {
-      snapshot.forEach(childSnap => {
-        const data = childSnap.val();
-        if (data.sku === skuInput.trim()) {
-          found = data;
-        }
-      });
-    }
+    snapshot.forEach(child => {
+      const data = child.val();
+      if (data.sku === skuInput.trim()) found = data;
+    });
     return found;
-  } catch (err) {
-    console.error(err);
-    return null;
-  }
-}
-
-window.checkVoucherBySKU = async function() {
-  const skuInput = document.getElementById("skuInput").value.trim();
-  const outputDiv = document.getElementById("skuCheckResult");
-  if (!skuInput) return;
-
-  const data = await checkSKU(skuInput);
-
-  if (!data) {
-    outputDiv.innerHTML = `<div class="result" style="color:orange">SKU Not Found ⚠</div>`;
-    return;
   }
 
-  const color = data.applicable === "Yes" ? "green" : "red";
-  const text = data.applicable === "Yes" ? "Voucher Applicable ✅" : "Voucher Not Applicable ❌";
-  outputDiv.innerHTML = `<div class="result" style="color:${color}">${text}</div>`;
+  function checkVoucherBySKU() {
+    const skuInput = document.getElementById("skuInput").value.trim();
+    const outputDiv = document.getElementById("skuCheckResult");
+    if (!skuInput) return;
 
-  if (data.price !== null) {
-    document.getElementById("price").value = data.price;
+    checkSKUOnce(skuInput).then(data => {
+      if (!data) {
+        outputDiv.innerHTML = `<div class="result" style="color:orange">SKU Not Found ⚠</div>`;
+        return;
+      }
+      const color = data.applicable === "Yes" ? "green" : "red";
+      const text = data.applicable === "Yes" ? "Voucher Applicable ✅" : "Voucher Not Applicable ❌";
+      outputDiv.innerHTML = `<div class="result" style="color:${color}">${text}</div>`;
+      if (data.price !== null) document.getElementById("price").value = data.price;
+    });
   }
-}
 
-  </script>
-
-  <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      padding: 20px;
-      background: linear-gradient(135deg,#dbeafe,#f3e8ff,#ffe4ec);
-    }
-
-    .title {
-      text-align: center;
-      font-size: 26px;
-      font-weight: bold;
-      margin-bottom: 15px;
-    }
-
-    .card {
-      background: white;
-      padding: 25px;
-      border-radius: 20px;
-      max-width: 400px;
-      margin: 20px auto;
-      text-align: center;
-    }
-
-    input, select, button {
-      width: 100%;
-      padding: 12px;
-      margin-top: 10px;
-      border-radius: 12px;
-      border: 1px solid #ddd;
-    }
-
-    button {
-      background: #93c5fd;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    .secondary-btn {
-      background: #fda4af;
-    }
-
-    .result {
-      margin-top: 15px;
-      padding: 12px;
-      background: #f5f3ff;
-      border-radius: 12px;
-    }
-
-    .price {
-      font-size: 20px;
-      font-weight: bold;
-      color: #be185d;
-    }
-
-    .sku-item {
-      background: #fff0f6;
-      padding: 10px;
-      border-radius: 10px;
-      margin-top: 10px;
-    }
-  </style>
-</head>
-<body>
-
-<div class="title">SHEIN PRICE CHECKER 2.2</div>
-<div id="app"></div>
-
-<script>
-let roundedPayable = 0;
-
-/* ---------- HOMEPAGE ---------- */
-function showHomepage() {
-  document.getElementById("app").innerHTML = `
-    <div class="card">
+  // ---------- HOMEPAGE ----------
+  let roundedPayable = 0;
+  function showHomepage() {
+    document.getElementById("app").innerHTML = `<div class="card">
       <button onclick="showVoucher()">Voucher Calculator</button>
       <button onclick="showPoints()">Points Only</button>
       <button class="secondary-btn" onclick="showSKU()">Cloud SKU Manager</button>
-    </div>
-  `;
-}
+    </div>`;
+  }
 
-/* ---------- VOUCHER CALCULATOR ---------- */
-function showVoucher() {
-  document.getElementById("app").innerHTML = `
-    <div class="card">
+  // ---------- VOUCHER CALCULATOR ----------
+  function showVoucher() {
+    document.getElementById("app").innerHTML = `<div class="card">
       <h2>Voucher Calculator</h2>
-
       <input type="number" id="price" placeholder="Enter Price (if no SKU)">
       <input type="text" id="skuInput" placeholder="Enter SKU (optional)">
       <button onclick="checkVoucherBySKU()">Check SKU</button>
       <div id="skuCheckResult"></div>
-
       <select id="voucherType">
         <option value="70">70% OFF (Cap 410)</option>
         <option value="73">73% OFF (Cap 469)</option>
       </select>
-
       <button onclick="calculateVoucher()">CHECK PRICE</button>
       <div id="output"></div>
-
       <input type="number" id="points" placeholder="Enter Points">
       <button class="secondary-btn" onclick="applyPoints()">APPLY POINTS</button>
-
       <button class="secondary-btn" onclick="showHomepage()">HOME</button>
-    </div>
-  `;
-}
+    </div>`;
+  }
 
-function calculateVoucher() {
-  const priceInput = parseFloat(document.getElementById("price").value);
-  const type = document.getElementById("voucherType").value;
+  function calculateVoucher() {
+    const priceInput = parseFloat(document.getElementById("price").value);
+    const type = document.getElementById("voucherType").value;
+    if (isNaN(priceInput) || priceInput <= 0) return;
+    const discount = type === "70" ? Math.min(priceInput*0.7,410) : Math.min(priceInput*0.73,469);
+    roundedPayable = Math.round(priceInput - discount);
+    document.getElementById("output").innerHTML = `<div class="result"><div class="price">₱${roundedPayable}</div></div>`;
+  }
 
-  if (isNaN(priceInput) || priceInput <= 0) return;
-
-  let discount = type === "70"
-    ? Math.min(priceInput * 0.7, 410)
-    : Math.min(priceInput * 0.73, 469);
-
-  const payable = priceInput - discount;
-  roundedPayable = Math.round(payable);
-
-  document.getElementById("output").innerHTML =
-    `<div class="result"><div class="price">₱${roundedPayable}</div></div>`;
-}
-
-function applyPoints() {
-  const points = parseFloat(document.getElementById("points").value);
-  if (isNaN(points) || points < 0) return;
-
-  const maxDeduction = Math.floor(roundedPayable * 0.30);
-  const actualDeduction = Math.min(points, maxDeduction);
-  const finalPrice = roundedPayable - actualDeduction;
-
-  document.getElementById("output").innerHTML += `
-    <div class="result">
+  function applyPoints() {
+    const points = parseFloat(document.getElementById("points").value);
+    if (isNaN(points) || points < 0) return;
+    const maxDeduction = Math.floor(roundedPayable*0.30);
+    const actualDeduction = Math.min(points,maxDeduction);
+    const finalPrice = roundedPayable - actualDeduction;
+    document.getElementById("output").innerHTML += `<div class="result">
       <p>Points Used: ${actualDeduction}</p>
       <p>Final Price:</p>
       <div class="price">₱${finalPrice}</div>
-    </div>
-  `;
-}
+    </div>`;
+  }
 
-/* ---------- POINTS ONLY ---------- */
-function showPoints() {
-  document.getElementById("app").innerHTML = `
-    <div class="card">
+  // ---------- POINTS ONLY ----------
+  function showPoints() {
+    document.getElementById("app").innerHTML = `<div class="card">
       <h2>Points Only</h2>
       <input type="number" id="poPrice" placeholder="Enter Price">
       <input type="number" id="poPoints" placeholder="Enter Points">
       <button onclick="calculatePoints()">CHECK</button>
       <div id="poOutput"></div>
       <button class="secondary-btn" onclick="showHomepage()">HOME</button>
-    </div>
-  `;
-}
+    </div>`;
+  }
 
-function calculatePoints() {
-  const price = parseFloat(document.getElementById("poPrice").value);
-  const points = parseFloat(document.getElementById("poPoints").value);
-  if (isNaN(price) || price <= 0 || isNaN(points) || points < 0) return;
+  function calculatePoints() {
+    const price = parseFloat(document.getElementById("poPrice").value);
+    const points = parseFloat(document.getElementById("poPoints").value);
+    if (isNaN(price) || price<=0 || isNaN(points) || points<0) return;
+    const rounded = Math.round(price);
+    const maxDeduction = Math.floor(rounded*0.30);
+    const actual = Math.min(points,maxDeduction);
+    const final = rounded - actual;
+    document.getElementById("poOutput").innerHTML = `<div class="result"><div class="price">₱${final}</div></div>`;
+  }
 
-  const rounded = Math.round(price);
-  const maxDeduction = Math.floor(rounded * 0.30);
-  const actual = Math.min(points, maxDeduction);
-  const final = rounded - actual;
-
-  document.getElementById("poOutput").innerHTML =
-    `<div class="result"><div class="price">₱${final}</div></div>`;
-}
-
-/* ---------- CLOUD SKU ---------- */
-function showSKU() {
-  document.getElementById("app").innerHTML = `
-    <div class="card">
+  // ---------- CLOUD SKU MANAGER ----------
+  function showSKU() {
+    document.getElementById("app").innerHTML = `<div class="card">
       <h2>Cloud SKU Manager</h2>
       <input type="text" id="sku" placeholder="Enter SKU">
       <input type="number" id="skuPrice" placeholder="Enter Original Price (optional)">
@@ -287,14 +181,11 @@ function showSKU() {
       <button onclick="saveSKU()">Save SKU</button>
       <div id="skuList"></div>
       <button class="secondary-btn" onclick="showHomepage()">HOME</button>
-    </div>
-  `;
-  loadSKUs();
-}
+    </div>`;
+    loadSKUs();
+  }
 
-/* ---------- START ---------- */
-showHomepage();
+  showHomepage();
 </script>
 </body>
 </html>
-
