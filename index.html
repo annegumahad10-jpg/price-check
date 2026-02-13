@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Price Checker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; padding:20px; background:#f0f0f0; }
+    .card { background:white; padding:25px; border-radius:20px; max-width:400px; margin:20px auto; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.08);}
+    input, button, select { width:100%; padding:12px; margin-top:12px; border-radius:12px; border:1px solid #ddd; font-size:16px; }
+    button { background:black; color:white; border:none; cursor:pointer; transition:0.3s ease;}
+    button:hover{background:#333;}
+    .secondary-btn{background:#ff4d6d;}
+    .secondary-btn:hover{background:#e63950;}
+    .result{margin-top:20px; padding:18px; background:#f8f8f8; border-radius:15px;}
+    .price{font-size:22px; font-weight:bold;}
+  </style>
+</head>
+<body>
+
+<div id="app"></div>
+
+<!-- -------------- FIREBASE SDK -------------- -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js"></script>
+
+<script>
+  // ----------- PASTE YOUR FIREBASE CONFIG HERE -----------
+  const firebaseConfig = {
+    apiKey: "AIzaSyCDYZv0j_K_ssHrGfZyKSUfGNtVPsjduoU",
+    authDomain: "pricechecker-app.firebaseapp.com",
+    projectId: "pricechecker-app",
+    storageBucket: "pricechecker-app.firebasestorage.app",
+    messagingSenderId: "515399450823",
+    appId: "1:515399450823:web:a50fff737d2d979897bee2",
+    measurementId: "G-61S51CR441"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
+  const app = firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+</script>
+
+<script>
+/* ------------------ HTML/JS APP ------------------ */
+
+let currentUser = null;
+let roundedPayable = 0;
+
+/* ---------- HOMEPAGE ---------- */
+function showHomepage(){
+  document.getElementById("app").innerHTML=`
+    <div class="card">
+      <h2>PRICE CHECKER</h2>
+      <button onclick="showLogin()">Admin Login</button>
+      <button onclick="showUserRegister()">User Register</button>
+      <button onclick="showPriceChecker()">Check Price</button>
+    </div>
+  `;
+}
+
+/* ---------- ADMIN LOGIN ---------- */
+function showLogin(){
+  document.getElementById("app").innerHTML=`
+    <div class="card">
+      <h2>ADMIN LOGIN</h2>
+      <input type="email" id="loginEmail" placeholder="Email">
+      <input type="password" id="loginPass" placeholder="Password">
+      <button onclick="adminLogin()">Login</button>
+      <button class="secondary-btn" onclick="showHomepage()">Back</button>
+      <div id="loginResult"></div>
+    </div>
+  `;
+}
+
+function adminLogin(){
+  const email = document.getElementById("loginEmail").value;
+  const pass = document.getElementById("loginPass").value;
+  auth.signInWithEmailAndPassword(email, pass)
+    .then((userCredential)=>{
+      currentUser=userCredential.user;
+      showAdminPanel();
+    })
+    .catch(err=>{
+      document.getElementById("loginResult").innerText=err.message;
+    });
+}
+
+/* ---------- ADMIN PANEL ---------- */
+function showAdminPanel(){
+  document.getElementById("app").innerHTML=`
+    <div class="card">
+      <h2>ADMIN PANEL</h2>
+      <button onclick="showManageSKUs()">Manage SKUs</button>
+      <button onclick="showApproveUsers()">Approve Users</button>
+      <button class="secondary-btn" onclick="auth.signOut().then(()=>showHomepage())">Logout</button>
+    </div>
+  `;
+}
+
+/* ---------- USER REGISTRATION ---------- */
+function showUserRegister(){
+  document.getElementById("app").innerHTML=`
+    <div class="card">
+      <h2>USER REGISTER</h2>
+      <input type="email" id="regEmail" placeholder="Email">
+      <input type="password" id="regPass" placeholder="Password">
+      <button onclick="registerUser()">Register</button>
+      <button class="secondary-btn" onclick="showHomepage()">Back</button>
+      <div id="regResult"></div>
+    </div>
+  `;
+}
+
+function registerUser(){
+  const email = document.getElementById("regEmail").value;
+  const pass = document.getElementById("regPass").value;
+  auth.createUserWithEmailAndPassword(email, pass)
+    .then(cred=>{
+      // Save user in Firestore as not approved
+      return db.collection("users").doc(cred.user.uid).set({email:email, approved:false});
+    })
+    .then(()=>{document.getElementById("regResult").innerText="Registered! Waiting for admin approval."})
+    .catch(err=>{document.getElementById("regResult").innerText=err.message});
+}
+
+/* ---------- APPROVE USERS ---------- */
+function showApproveUsers(){
+  db.collection("users").where("approved","==",false).get()
+    .then(snapshot=>{
+      let html='<h3>Pending Users</h3>';
+      snapshot.forEach(doc=>{
+        const data = doc.data();
+        html+=`<div>${data.email} <button onclick="approveUser('${doc.id}')">Approve</button></div>`;
+      });
+      html+='<button class="secondary-btn" onclick="showAdminPanel()">Back</button>';
+      document.getElementById("app").innerHTML=`<div class="card">${html}</div>`;
+    });
+}
+
+function approveUser(uid){
+  db.collection("users").doc(uid).update({approved:true}).then(()=>showApproveUsers());
+}
+
+/* ---------- MANAGE SKUs ---------- */
+let skuDatabase={};
+function showManageSKUs(){
+  document.getElementById("app").innerHTML=`
+    <div class="card">
+      <h2>MANAGE SKUs</h2>
+      <input type="text" id="manageSKU" placeholder="Enter SKU">
+      <select id="skuStatus"><option value="true">APPLICABLE</option><option value="false">NOT APPLICABLE</option></select>
+      <button onclick="saveSKU()">Save SKU</button>
+      <div id="manageResult" class="result"></div>
+      <button class="secondary-btn" onclick="showAdminPanel()">Back</button>
+    </div>
+  `;
+}
+
+function saveSKU(){
+  const sku=document.getElementById("manageSKU").value.trim();
+  const status=document.getElementById("skuStatus").value==="true";
+  if(!sku) return;
+  skuDatabase[sku]=status;
+  document.getElementById("manageResult").innerText=`SKU ${sku} saved as ${status?'APPLICABLE':'NOT APPLICABLE'}`;
+}
+
+/* ---------- PRICE CHECKER ---------- */
+function showPriceChecker(){
+  document.getElementById("app").innerHTML=`
+    <div class="card">
+      <h2>PRICE CHECKER</h2>
+      <label>Enter Original Price (₱)</label>
+      <input type="number" id="price" placeholder="Enter price...">
+      <select id="voucherType">
+        <option value="70">70% capped 410</option>
+        <option value="73">73% capped 469</option>
+      </select>
+      <button onclick="calculatePrice()">Check Price</button>
+      <div id="output"></div>
+      <button class="secondary-btn" onclick="showHomepage()">Back</button>
+    </div>
+  `;
+}
+
+function calculatePrice(){
+  const price=parseFloat(document.getElementById("price").value);
+  const voucher=parseInt(document.getElementById("voucherType").value);
+  if(isNaN(price)||price<=0) return;
+  let cap=voucher===70?410:469;
+  let discount=Math.min(price*(voucher/100),cap);
+  let payable=price-discount;
+  roundedPayable=Math.round(payable);
+  document.getElementById("output").innerHTML=`
+    <div class="result">
+      <p>After ${voucher}% voucher:</p>
+      <div class="price">₱${roundedPayable}</div>
+      <label>Enter Points Available:</label>
+      <input type="number" id="points" placeholder="Enter points...">
+      <button class="secondary-btn" onclick="checkFinalPrice()">CHECK FINAL PRICE</button>
+    </div>
+  `;
+}
+
+function checkFinalPrice(){
+  const pointsInput=parseFloat(document.getElementById("points").value);
+  if(isNaN(pointsInput)||pointsInput<0) return;
+  const maxDeduction=Math.floor(roundedPayable*0.30);
+  const actualDeduction=Math.min(pointsInput,maxDeduction);
+  const finalPrice=roundedPayable-actualDeduction;
+  document.getElementById("output").innerHTML+=`
+    <div class="result">
+      <p>Points Used: ${actualDeduction}</p>
+      <p>Final Price:</p>
+      <div class="price">₱${finalPrice}</div>
+    </div>
+  `;
+}
+
+/* ---------- INIT ---------- */
+showHomepage();
+</script>
+
+</body>
+</html>
